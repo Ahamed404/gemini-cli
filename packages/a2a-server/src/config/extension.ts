@@ -13,7 +13,7 @@ import {
   type GeminiCLIExtension,
   homedir,
 } from '@google/gemini-cli-core';
-import * as fs from 'node:fs';
+import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { logger } from '../utils/logger.js';
 
@@ -36,10 +36,12 @@ interface ExtensionConfig {
   excludeTools?: string[];
 }
 
-export function loadExtensions(workspaceDir: string): GeminiCLIExtension[] {
+export async function loadExtensions(
+  workspaceDir: string,
+): Promise<GeminiCLIExtension[]> {
   const allExtensions = [
-    ...loadExtensionsFromDir(workspaceDir),
-    ...loadExtensionsFromDir(homedir()),
+    ...(await loadExtensionsFromDir(workspaceDir)),
+    ...(await loadExtensionsFromDir(homedir())),
   ];
 
   const uniqueExtensions: GeminiCLIExtension[] = [];
@@ -57,17 +59,24 @@ export function loadExtensions(workspaceDir: string): GeminiCLIExtension[] {
   return uniqueExtensions;
 }
 
-function loadExtensionsFromDir(dir: string): GeminiCLIExtension[] {
+async function loadExtensionsFromDir(
+  dir: string,
+): Promise<GeminiCLIExtension[]> {
   const extensionsDir = path.join(dir, EXTENSIONS_DIRECTORY_NAME);
-  if (!fs.existsSync(extensionsDir)) {
+
+  try {
+    await fs.access(extensionsDir);
+  } catch {
     return [];
   }
 
   const extensions: GeminiCLIExtension[] = [];
-  for (const subdir of fs.readdirSync(extensionsDir)) {
+  const subdirs = await fs.readdir(extensionsDir);
+
+  for (const subdir of subdirs) {
     const extensionDir = path.join(extensionsDir, subdir);
 
-    const extension = loadExtension(extensionDir);
+    const extension = await loadExtension(extensionDir);
     if (extension != null) {
       extensions.push(extension);
     }
@@ -75,8 +84,17 @@ function loadExtensionsFromDir(dir: string): GeminiCLIExtension[] {
   return extensions;
 }
 
-function loadExtension(extensionDir: string): GeminiCLIExtension | null {
-  if (!fs.statSync(extensionDir).isDirectory()) {
+async function loadExtension(
+  extensionDir: string,
+): Promise<GeminiCLIExtension | null> {
+  let stats;
+  try {
+    stats = await fs.stat(extensionDir);
+  } catch {
+    return null;
+  }
+
+  if (!stats.isDirectory()) {
     logger.error(
       `Warning: unexpected file ${extensionDir} in extensions directory.`,
     );
@@ -84,7 +102,10 @@ function loadExtension(extensionDir: string): GeminiCLIExtension | null {
   }
 
   const configFilePath = path.join(extensionDir, EXTENSIONS_CONFIG_FILENAME);
-  if (!fs.existsSync(configFilePath)) {
+
+  try {
+    await fs.access(configFilePath);
+  } catch {
     logger.error(
       `Warning: extension directory ${extensionDir} does not contain a config file ${configFilePath}.`,
     );
@@ -92,7 +113,7 @@ function loadExtension(extensionDir: string): GeminiCLIExtension | null {
   }
 
   try {
-    const configContent = fs.readFileSync(configFilePath, 'utf-8');
+    const configContent = await fs.readFile(configFilePath, 'utf-8');
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
     const config = JSON.parse(configContent) as ExtensionConfig;
     if (!config.name || !config.version) {
@@ -102,11 +123,20 @@ function loadExtension(extensionDir: string): GeminiCLIExtension | null {
       return null;
     }
 
-    const installMetadata = loadInstallMetadata(extensionDir);
+    const installMetadata = await loadInstallMetadata(extensionDir);
 
-    const contextFiles = getContextFileNames(config)
-      .map((contextFileName) => path.join(extensionDir, contextFileName))
-      .filter((contextFilePath) => fs.existsSync(contextFilePath));
+    const contextFileNames = getContextFileNames(config);
+    const contextFiles: string[] = [];
+
+    for (const contextFileName of contextFileNames) {
+      const contextFilePath = path.join(extensionDir, contextFileName);
+      try {
+        await fs.access(contextFilePath);
+        contextFiles.push(contextFilePath);
+      } catch {
+        // File doesn't exist, skip it
+      }
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
     return {
@@ -136,12 +166,12 @@ function getContextFileNames(config: ExtensionConfig): string[] {
   return config.contextFileName;
 }
 
-export function loadInstallMetadata(
+export async function loadInstallMetadata(
   extensionDir: string,
-): ExtensionInstallMetadata | undefined {
+): Promise<ExtensionInstallMetadata | undefined> {
   const metadataFilePath = path.join(extensionDir, INSTALL_METADATA_FILENAME);
   try {
-    const configContent = fs.readFileSync(metadataFilePath, 'utf-8');
+    const configContent = await fs.readFile(metadataFilePath, 'utf-8');
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
     const metadata = JSON.parse(configContent) as ExtensionInstallMetadata;
     return metadata;

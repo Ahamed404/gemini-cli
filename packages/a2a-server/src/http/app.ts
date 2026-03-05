@@ -158,8 +158,8 @@ export async function createApp() {
     // Load the server configuration once on startup.
     const workspaceRoot = setTargetDir(undefined);
     loadEnvironment();
-    const settings = loadSettings(workspaceRoot);
-    const extensions = loadExtensions(workspaceRoot);
+    const settings = await loadSettings(workspaceRoot);
+    const extensions = await loadExtensions(workspaceRoot);
     const config = await loadConfig(
       settings,
       new SimpleExtensionLoader(extensions),

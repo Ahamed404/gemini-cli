@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import * as fs from 'node:fs';
+import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
 import {
@@ -64,26 +64,32 @@ export interface CheckpointingSettings {
  * than `LoadedSettings` (unnecessary since we are not modifying users
  * settings.json).
  */
-export function loadSettings(workspaceDir: string): Settings {
+export async function loadSettings(workspaceDir: string): Promise<Settings> {
   let userSettings: Settings = {};
   let workspaceSettings: Settings = {};
   const settingsErrors: SettingsError[] = [];
 
   // Load user settings
   try {
-    if (fs.existsSync(USER_SETTINGS_PATH)) {
-      const userContent = fs.readFileSync(USER_SETTINGS_PATH, 'utf-8');
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-      const parsedUserSettings = JSON.parse(
-        stripJsonComments(userContent),
-      ) as Settings;
-      userSettings = resolveEnvVarsInObject(parsedUserSettings);
-    }
+    await fs.access(USER_SETTINGS_PATH);
+    const userContent = await fs.readFile(USER_SETTINGS_PATH, 'utf-8');
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+    const parsedUserSettings = JSON.parse(
+      stripJsonComments(userContent),
+    ) as Settings;
+    userSettings = resolveEnvVarsInObject(parsedUserSettings);
   } catch (error: unknown) {
-    settingsErrors.push({
-      message: getErrorMessage(error),
-      path: USER_SETTINGS_PATH,
-    });
+    if (
+      error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      error.code !== 'ENOENT'
+    ) {
+      settingsErrors.push({
+        message: getErrorMessage(error),
+        path: USER_SETTINGS_PATH,
+      });
+    }
   }
 
   const workspaceSettingsPath = path.join(
@@ -94,19 +100,25 @@ export function loadSettings(workspaceDir: string): Settings {
 
   // Load workspace settings
   try {
-    if (fs.existsSync(workspaceSettingsPath)) {
-      const projectContent = fs.readFileSync(workspaceSettingsPath, 'utf-8');
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-      const parsedWorkspaceSettings = JSON.parse(
-        stripJsonComments(projectContent),
-      ) as Settings;
-      workspaceSettings = resolveEnvVarsInObject(parsedWorkspaceSettings);
-    }
+    await fs.access(workspaceSettingsPath);
+    const projectContent = await fs.readFile(workspaceSettingsPath, 'utf-8');
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+    const parsedWorkspaceSettings = JSON.parse(
+      stripJsonComments(projectContent),
+    ) as Settings;
+    workspaceSettings = resolveEnvVarsInObject(parsedWorkspaceSettings);
   } catch (error: unknown) {
-    settingsErrors.push({
-      message: getErrorMessage(error),
-      path: workspaceSettingsPath,
-    });
+    if (
+      error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      error.code !== 'ENOENT'
+    ) {
+      settingsErrors.push({
+        message: getErrorMessage(error),
+        path: workspaceSettingsPath,
+      });
+    }
   }
 
   if (settingsErrors.length > 0) {

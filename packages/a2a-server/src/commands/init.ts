@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import * as fs from 'node:fs';
+import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { CoderAgentEvent, type AgentSettings } from '../types.js';
 import { performInit } from '@google/gemini-cli-core';
@@ -80,7 +80,7 @@ export class InitCommand implements Command {
     taskId: string,
     contextId: string,
   ): Promise<CommandExecutionResponse> {
-    fs.writeFileSync(geminiMdPath, '', 'utf8');
+    await fs.writeFile(geminiMdPath, '', 'utf8');
 
     if (!context.agentExecutor) {
       throw new Error('Agent executor not found in context.');
@@ -139,7 +139,11 @@ export class InitCommand implements Command {
       process.env['CODER_AGENT_WORKSPACE_PATH']!,
       'GEMINI.md',
     );
-    const result = performInit(fs.existsSync(geminiMdPath));
+    const geminiMdExists = await fs
+      .access(geminiMdPath)
+      .then(() => true)
+      .catch(() => false);
+    const result = performInit(geminiMdExists);
 
     const taskId = uuidv4();
     const contextId = uuidv4();

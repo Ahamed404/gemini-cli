@@ -89,7 +89,7 @@ describe('loadSettings', () => {
     vi.restoreAllMocks();
   });
 
-  it('should load other top-level settings correctly', () => {
+  it('should load other top-level settings correctly', async () => {
     const settings = {
       showMemoryUsage: true,
       coreTools: ['tool1', 'tool2'],
@@ -105,14 +105,14 @@ describe('loadSettings', () => {
     };
     fs.writeFileSync(USER_SETTINGS_PATH, JSON.stringify(settings));
 
-    const result = loadSettings(mockWorkspaceDir);
+    const result = await loadSettings(mockWorkspaceDir);
     expect(result.showMemoryUsage).toBe(true);
     expect(result.coreTools).toEqual(['tool1', 'tool2']);
     expect(result.mcpServers).toHaveProperty('server1');
     expect(result.fileFiltering?.respectGitIgnore).toBe(true);
   });
 
-  it('should overwrite top-level settings from workspace (shallow merge)', () => {
+  it('should overwrite top-level settings from workspace (shallow merge)', async () => {
     const userSettings = {
       showMemoryUsage: false,
       fileFiltering: {
@@ -134,7 +134,7 @@ describe('loadSettings', () => {
     );
     fs.writeFileSync(workspaceSettingsPath, JSON.stringify(workspaceSettings));
 
-    const result = loadSettings(mockWorkspaceDir);
+    const result = await loadSettings(mockWorkspaceDir);
     // Primitive value overwritten
     expect(result.showMemoryUsage).toBe(true);
 

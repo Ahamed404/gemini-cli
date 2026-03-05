@@ -7,7 +7,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { InitCommand } from './init.js';
 import { performInit } from '@google/gemini-cli-core';
-import * as fs from 'node:fs';
+import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { CoderAgentExecutor } from '../agent/executor.js';
 import { CoderAgentEvent } from '../types.js';
@@ -26,12 +26,19 @@ vi.mock('@google/gemini-cli-core', async (importOriginal) => {
   };
 });
 
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  return {
+    ...actual,
+    access: vi.fn(),
+    writeFile: vi.fn(),
+  };
+});
+
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs')>();
   return {
     ...actual,
-    existsSync: vi.fn(),
-    writeFileSync: vi.fn(),
   };
 });
 
@@ -75,6 +82,8 @@ describe('InitCommand', () => {
     mockExecute = vi.fn();
     vi.spyOn(mockExecutorInstance, 'execute').mockImplementation(mockExecute);
     vi.clearAllMocks();
+    vi.mocked(fs.access).mockResolvedValue(undefined);
+    vi.mocked(fs.writeFile).mockResolvedValue(undefined);
   });
 
   it('has requiresWorkspace set to true', () => {
@@ -150,7 +159,7 @@ describe('InitCommand', () => {
       it('writes the file and executes the agent', async () => {
         await command.execute(context, []);
 
-        expect(fs.writeFileSync).toHaveBeenCalledWith(
+        expect(fs.writeFile).toHaveBeenCalledWith(
           path.join(mockWorkspacePath, 'GEMINI.md'),
           '',
           'utf8',
